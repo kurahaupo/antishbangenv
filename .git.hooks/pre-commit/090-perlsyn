@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Ensure that all files are valid Perl
+
+shopt -s extglob    # avoid matching '*.*'
+shopt -s globstar   # recursive '**' search
+shopt -s nullglob   # in case this project has no Perl files
+
+PerlFiles=( **/*.p[lm] )
+NoSuffix=( **/!(*.*) )
+(( ${#NoSuffix[@]} )) &&
+readarray -tO${#X[@]} X < <(
+    grep -Esl '^#![[:space:]]*[^[:space:]]*perl' "${NoSuffix[@]}"
+)
+
+export PERL_debug_export=0  # Shush! Don't mention exports just because they happen to be
+
+perl_opts=()
+[[ -d lib ]] && perl_opts+=( -Ilib )
+
+for f in "${PerlFiles[@]}"
+do
+    printf '\n\e[1;33;40m%s\e[m\n' "$f"
+    perl -c "${perl_opts[@]}" "$f" || exit
+done

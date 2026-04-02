@@ -1,0 +1,91 @@
+#!/bin/sh
+#
+# To enable the respective hook, copy or link this file to:
+#   .git/hooks/applypatch-msg
+#   .git/hooks/commit-msg
+#   .git/hooks/post-update
+#   .git/hooks/pre-applypatch
+#   .git/hooks/pre-commit
+#   .git/hooks/pre-push
+#   .git/hooks/pre-rebase
+#   .git/hooks/prepare-commit-msg
+#   .git/hooks/update
+
+tdir=${0%.git?hooks/*}
+
+hook=${0##*/}
+
+case :$GIT_HOOKS_VERBOSE: in
+  *:"$hook":* | *:all:* | *:yes:*)
+        verbose=true ;;
+  *)    verbose=false
+esac
+
+case $1 in
+  -v | --verbose) shift ; verbose=true
+esac
+
+case /$0 in
+  */.git.hooks/install |\
+  */.git.hooks/run)
+        #
+        # Self-install mode
+        #
+        # Install hooks specified as arguments. If none are given, install nine
+        # standard hooks plus any ".sample" hints.
+        #
+        ex=0
+        [ $# = 0 ] &&
+            set -- applypatch-msg commit-msg post-update pre-applypatch \
+                   pre-commit pre-push pre-rebase prepare-commit-msg update \
+                   "$tdir".git/hooks/*.sample
+
+        for h do
+            up=../../
+            case /$h in
+              */.git/hooks/*)
+                    h=${h%.sample} ;;
+              /*/*) echo "Path '$h' not allowed" ; ex=2 ; continue ;;
+              *)    h=$tdir.git/hooks/$h ;;
+            esac
+            "$verbose" &&
+            printf 'INSTALL git hook %s\n' "$h"
+            [ -e "$h" ] && continue
+            [ -h "$h" ] && continue
+            ln -sv "$up.git.hooks/run" "$h"
+        done
+        exit "$ex"
+        ;;
+
+  */.git/hooks/*)
+        #
+        # Running as a git hook...
+        #
+        dir=$tdir.git.hooks/$hook/
+
+        [ -d "$dir." ] || exit 0
+
+        # Normally diff against head ...
+        git_head=HEAD
+        # ... but for an initial commit, diff against an empty tree object
+        git rev-parse --verify "$git_head" >/dev/null 2>&1 || git_head=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+        export git_head
+
+        for f in "$dir"[0-9]*[0-9a-zA-Z]
+        do
+            "$verbose" &&
+            printf 'RUN  git %s check %s\n' "$hook" "$f"
+
+            [ -f "$f" ] || continue
+            [ -x "$f" ] || continue
+            "$f" "$@"   && continue
+            r=$?
+            printf 'FAIL git %s check %s with status %u.\n' "$hook" "$f" "$r"
+            exit "$r"
+        done
+        exit 0
+        ;;
+
+  *)    echo "Cannot determine function from own path '$0'"
+        exit 2
+esac
